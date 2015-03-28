@@ -21,7 +21,7 @@ def calculate_timestamp_delta(shift):
 
     sys_gmtime = time.gmtime(0)
     sys_epoch = datetime.date(sys_gmtime.tm_year,
-        sys_gmtime.tm_mon, sys_gmtime.tm_mday)
+                              sys_gmtime.tm_mon, sys_gmtime.tm_mday)
     ntp_epoch = datetime.date(1900, 1, 1)
     timestamp_delta = (sys_epoch - ntp_epoch).total_seconds() + shift
 
@@ -52,9 +52,10 @@ class Packet:
         try:
             bytes_packet = struct.pack(
                 self.format,
-                self.leap << 6 | self.version << 3 | self.mode,
+                self.li << 6 | self.version << 3 | self.mode,
                 self.stratum,
-                self.interval,
+                self.poll,
+                # self.interval,
                 self.precision,
                 int(self.delay * 2 ** 16),
                 int(self.dispersion * 2 ** 16),
@@ -91,17 +92,11 @@ class Packet:
         return packet
 
 
-class PacketHandler(socketserver.BaseRequestHandler):
+class Server(socketserver.BaseRequestHandler):
     def handle(self):
-
         recv_timestamp = get_timestamp()
-
-        print('Connected: {}'.format(self.client_address))
-
         data, socket = self.request
-
         recv_packet = Packet.get_packet_from_bytes(data)
-
         send_packet = Packet()
         send_packet.version = recv_packet.version
         send_packet.mode = 4
@@ -109,22 +104,16 @@ class PacketHandler(socketserver.BaseRequestHandler):
         send_packet.start_time = recv_packet.transmit_time
         send_packet.recv_time = recv_timestamp
         send_packet.transmit_time = get_timestamp()
-        print(111)
         socket.sendto(send_packet.convert_to_bytes(), self.client_address)
 
 
 def main():
-    if len(sys.argv[1:]) < 2:
-        print("Usage: Ip Port")
-        exit()
-    # server_ip = sys.argv[1]
-    # server_port = int(sys.argv[2])
-    server_ip = "localhost"
-    server_port = 123
+    server_ip = "127.0.0.1"
+    server_port = 5000
     shift = json.load(open("config.conf"))["shift"]
     calculate_timestamp_delta(shift)
     socketserver.BaseServer.allow_reuse_address = True
-    server = socketserver.UDPServer((server_ip, server_port), PacketHandler)
+    server = socketserver.UDPServer((server_ip, server_port), Server)
     server.serve_forever()
 
 if __name__ == "__main__":
